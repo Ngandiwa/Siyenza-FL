@@ -26,21 +26,21 @@ GenerateInteragencyOutput <-  function(tx_curr_startOfSiyenza,
   # tx_curr_startOfSiyenza  <-  as.POSIXct("2019-03-01")
   # startOfSiyenza          <-  as.POSIXct("2019-03-15")
   # endOfSiyenza            <-  as.POSIXct("2019-05-10")
-  # currentWeekStart        <-  as.POSIXct("2019-03-30")
-  # currentWeekEnd          <-  as.POSIXct("2019-04-05")
+  # currentWeekStart        <-  as.POSIXct("2019-04-13")
+  # currentWeekEnd          <-  as.POSIXct("2019-04-19")
 
   weeks_remaining <- isoweek(endOfSiyenza) - isoweek(currentWeekEnd)
   
   tx_curr_dates <-  c("2019-03-01","2019-03-29","2019-04-12","2019-05-03", "2019-05-10")
   
-  cdc_result <- read_excel("RAW/CDC_Siyenza_20190409.xlsx", sheet = "Siyenza") %>%
+  cdc_result <- read_excel("RAW/CDC_Siyenza_20190424.xlsx", sheet = "Siyenza") %>%
     # filter(Week_End >= startOfSiyenza & Week_End <= date(currentWeekEnd) +1)
     filter(Week_End >= date(tx_curr_startOfSiyenza) & Week_End <= date(currentWeekEnd))
   
-  usaid_result <- read_excel("RAW/USAID_Siyenza_20190409.xlsx", sheet = "USAID") %>% 
+  usaid_result <- read_excel("RAW/USAID_Siyenza_20190424.xlsx", sheet = "USAID RawData") %>% 
     filter(Week_End >= date(tx_curr_startOfSiyenza) & Week_End <= date(currentWeekEnd))
   
-  df_merged <- bind_rows(cdc_result,usaid_result) %>% 
+  df_merged <- bind_rows(cdc_result, usaid_result) %>% 
     rename(TPT_Initiated = "TPT initiated") %>% 
     select(-CURR_RTC)
  
@@ -77,11 +77,12 @@ GenerateInteragencyOutput <-  function(tx_curr_startOfSiyenza,
   
   df_cum <-  df_all %>%
     gather(indicator, value, cLTFU:uLTFU, na.rm = TRUE) %>% 
-    filter(indicator %in% c("HTS_TST_POS","TX_NEW", "TX_NEW_SAMEDAY", "TPT_Initiated")) %>% 
+    filter(indicator %in% c("HTS_TST_POS","TX_NEW", "TX_NEW_SAMEDAY", "TPT_Initiated")
+           ) %>% 
     group_by(Facility, indicator) %>% 
     arrange(Week_End) %>% 
     mutate(cum_value = cumsum(value)) %>% 
-    ungroup %>% 
+    ungroup() %>% 
     mutate(indicator = paste0(indicator, "_CUM"))%>% 
     filter(Week_End == date(currentWeekEnd)) %>%
     select(-value) %>% 
@@ -102,7 +103,8 @@ GenerateInteragencyOutput <-  function(tx_curr_startOfSiyenza,
   
   df_tx_curr_todate <- df_all %>% 
     gather(indicator, value, cLTFU:uLTFU, na.rm = TRUE) %>% 
-    filter(indicator %in% c("TX_CURR_28")) 
+    filter(indicator %in% c("TX_CURR_28")) %>% 
+    mutate(indicator = "TX_CURR_28_TODATE") 
   
   max_tx_curr_date <-  max(df_tx_curr_todate$Week_End)
   
@@ -110,11 +112,10 @@ GenerateInteragencyOutput <-  function(tx_curr_startOfSiyenza,
   ###TODO:
   # if(max_tx_curr_date == date(currentWeekEnd))
   # {
-    df_tx_curr_todate <-  df_tx_curr_todate %>% 
-      filter(Week_End == max_tx_curr_date) %>% 
-      mutate(indicator = "TX_CURR_28_TODATE") %>% 
-      filter(indicator %in% "TX_CURR_28_TODATE")
-    
+    # df_tx_curr_todate <-  df_tx_curr_todate %>% 
+    #   # filter(Week_End == max_tx_curr_date) %>% 
+    #   mutate(indicator = "TX_CURR_28_TODATE") 
+    # 
   # }
   # else
   # {
@@ -122,20 +123,39 @@ GenerateInteragencyOutput <-  function(tx_curr_startOfSiyenza,
   #     filter()
   #     
   # }
-  df_tx_curr_merged <-  bind_rows(df_tx_curr_baseline, df_tx_curr_todate) 
   
+  df_max_txcurr_todate <-   df_tx_curr_todate %>% 
+    filter(Week_End == max_tx_curr_date)
+  
+  df_tx_curr_merged <-  bind_rows(df_tx_curr_baseline, df_max_txcurr_todate) 
+  
+  # currentweek <- isoweek(currentWeekEnd)
+  # tx_curr_week <-  isoweek(tx_curr_startOfSiyenza)
+  # lapsedWeeks <-  currentweek - tx_curr_week
+  # 
   df_net_new <- df_tx_curr_merged %>% 
+    # mutate(indicator = case_when(indicator %in% "TX_CURR_28_TODATE" ~ paste0(Week_End,"_",indicator),
+    #                              TRUE ~ indicator)) %>% 
+    
     select(-Week_Start, -Week_End) %>%
     spread(indicator, value) %>% 
     mutate(TX_NET_NEW_28_TODATE = (`TX_CURR_28_TODATE` - `TX_CURR_28_BASE`),
            Week_Start = date(as.POSIXct(max_tx_curr_date))-6,
-           Week_End = date(as.POSIXct(max_tx_curr_date)),
-           TX_NET_NEW_AVG = case_when(Week_End == date(max_tx_curr_date) ~ TX_NET_NEW_28_TODATE/4,
-                                      TRUE ~ TX_NET_NEW_28_TODATE/2)) %>%
+           Week_End = date(as.POSIXct(max_tx_curr_date)), 
+           # TX_NET_NEW_AVG = case_when(Week_End == date("2019-03-29") ~ TX_NET_NEW_28_TODATE/4,
+           #                            TRUE ~ TX_NET_NEW_28_TODATE/2)) %>%
+           TX_NET_NEW_AVG= TX_NET_NEW_28_TODATE/2) %>% 
     gather(indicator, value, TX_CURR_28_BASE,TX_CURR_28_TODATE,TX_NET_NEW_28_TODATE, TX_NET_NEW_AVG) %>% 
     filter(indicator %in% c('TX_NET_NEW_28_TODATE', 'TX_NET_NEW_AVG')) %>% 
-    mutate(Week_Start = as.POSIXct(Week_Start), 
-           Week_End = as.POSIXct(Week_End))
+    mutate(Week_Start =  as.POSIXct(Week_Start),
+           Week_End  = as.POSIXct(Week_End))
+  
+  
+  # df_net_new_avg <- df_tx_curr_todate %>% 
+    
+  
+  attr(df_net_new$Week_End, "tzone") <- "UTC"
+  attr(df_net_new$Week_Start, "tzone") <- "UTC"
  
   df_curr <-  bind_rows(df_tx_curr_merged,df_net_new)
   
@@ -148,7 +168,7 @@ GenerateInteragencyOutput <-  function(tx_curr_startOfSiyenza,
     replace(is.na(.), "") %>% 
     arrange(Facility,Week_End)
   
-  
+   
   write.table(df, paste0("Outputs/interagencyDash_", Sys.Date(), ".txt"), sep = "\t", row.names = FALSE)
   
   return(df)
@@ -188,21 +208,86 @@ GenerateDataQualityReport <- function(df,currentWeekEnd,df_quality)
   
 }
 
+
+MergeFrenzyBlitz_with_Siyenza <- function(tx_curr_startOfSiyenza,
+                                                   startOfSiyenza, 
+                                                   endOfSiyenza, 
+                                                   currentWeekStart,
+                                                   currentWeekEnd,
+                                                   df_all_merged)
+{
+  
+  tx_curr_startOfSiyenza   <-  as.POSIXct(tx_curr_startOfSiyenza)
+  startOfSiyenza           <-  as.POSIXct(startOfSiyenza)
+  endOfSiyenza             <-  as.POSIXct(endOfSiyenza)
+  currentWeekStart         <-  as.POSIXct(currentWeekStart)
+  currentWeekEnd           <-  as.POSIXct(currentWeekEnd)
+  
+  
+  # tx_curr_startOfSiyenza  <-  as.POSIXct("2019-03-01")
+  # startOfSiyenza          <-  as.POSIXct("2019-03-15")
+  # endOfSiyenza            <-  as.POSIXct("2019-05-10")
+  # currentWeekStart        <-  as.POSIXct("2019-03-30")
+  # currentWeekEnd          <-  as.POSIXct("2019-04-05")
+  
+  
+  cdc_result <- read_excel("RAW/CDC_Siyenza_20190423_FFandSIYENZA.xlsx", sheet = "Siyenza") %>%
+    # filter(Week_End >= startOfSiyenza & Week_End <= date(currentWeekEnd) +1)
+   filter(Week_End <= date(currentWeekEnd))
+
+  usaid_result <- read_excel("RAW/USAID_Siyenza_20190424.xlsx", sheet = "USAID RawData") %>% 
+    filter(Week_End <= date(currentWeekEnd))
+
+
+  
+ df_merged <- bind_rows(cdc_result, usaid_result) %>% 
+    rename(TPT_Initiated = "TPT initiated") %>% 
+    select(-CURR_RTC)
+ 
+
+ df_all_merged <-  df_merged %>% 
+   gather(indicator, value,HTS_TST_POS:TARG_WKLY_NETNEW, na.rm = TRUE) %>% 
+   filter(indicator %in% c("TX_NEW", "HTS_TST_POS", "TX_CURR_28" )) %>% 
+   mutate(value = case_when(
+     # Week_End < date(currentWeekEnd) - 7 & indicator %in% c("TX_CURR_28")  ~ 0,
+     Week_End == date(startOfSiyenza) & indicator %in% c("TX_CURR_28")  ~ 0,
+     TRUE ~ value)) %>% 
+   spread(indicator, value) %>% 
+   replace(is.na(.), "") 
+
+ 
+  write.table(df_all_merged, paste0("Outputs/FF_FB_Siyenza_", Sys.Date(), ".txt"), sep = "\t", row.names = FALSE)
+ 
+ 
+ return(df_all_merged)
+ 
+
+}
+
+####EXECUTE FUNCTIONS#######
+
 df <- GenerateInteragencyOutput(tx_curr_startOfSiyenza  = "2019-03-01",
                           startOfSiyenza = "2019-03-15",
                           endOfSiyenza = "2019-05-10",
-                          currentWeekStart = "2019-03-30",
-                          currentWeekEnd = "2019-04-05")
+                          currentWeekStart = "2019-04-13",
+                          currentWeekEnd = "2019-04-19")
 
 
-# tx_curr_startOfSiyenza  <-  as.POSIXct("2019-03-01")
-# startOfSiyenza          <-  as.POSIXct("2019-03-15")
-# endOfSiyenza            <-  as.POSIXct("2019-05-10")
-# currentWeekStart        <-  as.POSIXct("2019-03-23")
-# currentWeekEnd          <-  as.POSIXct("2019-03-29")
-
-df_quality <-  GenerateDataQualityReport(df, currentWeekEnd = "2019-04-05")
+df_quality <-  GenerateDataQualityReport(df, currentWeekEnd = "2019-04-12")
 
 
+df_all_merged <-  MergeFrenzyBlitz_with_Siyenza(tx_curr_startOfSiyenza  = "2019-03-01",
+                                                startOfSiyenza = "2019-03-15",
+                                                endOfSiyenza = "2019-05-10",
+                                                currentWeekStart = "2019-04-13",
+                                                currentWeekEnd = "2019-04-19")
+
+# 
+# df_facility <-  df_all_merged %>% 
+#   select(Facility,FundingAgency, Siyenza_Site) %>% 
+#   distinct 
+# 
+# 
+# write.table(df_facility, paste0("../Resources/FF_FB_Siyenza_Sites",".txt"), sep = "\t", row.names = FALSE)
 
 
