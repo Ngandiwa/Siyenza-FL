@@ -9,7 +9,7 @@ Phase one of intense focus to put the PEPFAR SA program back on track to have 6.
 ## Methodology
 
 - Focused on sites contributing to **40%** of TROA
-- **156 CDC an 187 USAID**
+- **156 CDC and 187 USAID**
 
 ## Timeline
 
