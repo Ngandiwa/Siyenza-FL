@@ -32,10 +32,11 @@ GenerateInteragencyOutput <-  function(tx_curr_startOfSiyenza,
   # ##### Uncomment if running the script within the function is desired. 
   # tx_curr_startOfSiyenza  <-  as.POSIXct("2019-03-01")
   # startOfSiyenza          <-  as.POSIXct("2019-03-15")
-  # endOfSiyenza            <-  as.POSIXct("2019-07-19")
-  # currentWeekStart        <-  as.POSIXct("2019-06-01")
-  # currentWeekEnd          <-  as.POSIXct("2019-06-07")
-  
+  # endOfSiyenza            <-  as.POSIXct("2019-08-31")
+  # currentWeekStart        <-  as.POSIXct("2019-07-27")
+  # currentWeekEnd          <-  as.POSIXct("2019-08-02")
+  # 
+  # 
   ##### Calcuate weeks remaining as well as the total number of weeks
   weeks_remaining <- isoweek(endOfSiyenza) - isoweek(currentWeekEnd)
   number_of_weeks <- isoweek(currentWeekEnd) - isoweek(tx_curr_startOfSiyenza)
@@ -43,14 +44,14 @@ GenerateInteragencyOutput <-  function(tx_curr_startOfSiyenza,
   ##### TX_CURR Dates as agreed upon by interagency stakeholders. ####
   ### TX_CURR values are collected for only the days listed below ###
   tx_curr_dates <-  c("2019-03-01","2019-03-29","2019-04-12", "2019-05-10", 
-                      "2019-05-24","2019-06-07", "2019-06-21", "2019-07-05", "2019-07-19" )
+                      "2019-05-24","2019-06-07", "2019-06-21", "2019-07-05", "2019-07-19", "2019-08-02" )
   
   ##### Import CDC datasets #####
-  cdc_result <- read_excel("RAW/CDC_Siyenza_20190611.xlsx", sheet = "Siyenza") %>%
+  cdc_result <- read_excel("RAW/CDC_Siyenza_20190806.xlsx", sheet = "Siyenza") %>%
     # filter(Week_End >= startOfSiyenza & Week_End <= date(currentWeekEnd) +1)
     filter(Week_End >= date(tx_curr_startOfSiyenza) & Week_End <= date(currentWeekEnd))
   ##### Import USAID datasets #####
-  usaid_result <- read_excel("RAW/USAID_Siyenza_20190611.xlsx", sheet = "USAID RAW DATA") %>% 
+  usaid_result <- read_excel("RAW/USAID_Siyenza_20190806.xlsx", sheet = "USAID RAW DATA") %>% 
     filter(Week_End >= date(tx_curr_startOfSiyenza) & Week_End <= date(currentWeekEnd))
   ##### Merge interagency datasets #####
   df_merged <- bind_rows(cdc_result, usaid_result) %>% 
@@ -179,7 +180,9 @@ GenerateInteragencyOutput <-  function(tx_curr_startOfSiyenza,
   df <-  bind_rows(df_final, df_curr) %>% 
     spread(indicator, value)%>% 
     replace(is.na(.), "") %>% 
-    arrange(Facility,Week_End)
+    arrange(Facility,Week_End) %>% 
+    mutate(siyenza_site_status = case_when(Siyenza_StartDate == date("2019-08-01") ~ "New",
+                                           TRUE ~ "Existing"))
   
   #### Write to txt output
   write.table(df, paste0("Outputs/interagencyDash_", Sys.Date(), ".txt"), sep = "\t", row.names = FALSE)
@@ -288,9 +291,9 @@ MergeFrenzyBlitz_with_Siyenza <- function(tx_curr_startOfSiyenza,
 
 df <- GenerateInteragencyOutput(tx_curr_startOfSiyenza  = "2019-03-01",
                                 startOfSiyenza = "2019-03-15",
-                                endOfSiyenza = "2019-07-19",
-                                currentWeekStart = "2019-06-01",
-                                currentWeekEnd = "2019-06-07")
+                                endOfSiyenza = "2019-08-31",
+                                currentWeekStart = "2019-07-27",
+                                currentWeekEnd = "2019-08-02")
 
 # 
 # df_quality <-  GenerateDataQualityReport(df, currentWeekEnd = "2019-04-12")
