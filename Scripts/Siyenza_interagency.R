@@ -159,7 +159,8 @@ GenerateInteragencyOutput <-  function(tx_curr_startOfSiyenza,
     filter(Week_End != date("2019-03-15")) %>% 
     group_by(Facility, indicator) %>% 
     arrange(Week_End) %>% 
-    mutate(diff_value = value - lag(value)) %>% 
+    mutate(diff_value = case_when(Week_End == date("2019-08-02") & Siyenza_StartDate == date("2019-08-01") ~ 0,
+                                  TRUE ~ value - lag(value)))%>% 
     ungroup() %>% 
     mutate(indicator = paste0("TX_NET_NEW_BI_WEEKLY"),
            value = diff_value)%>% 
