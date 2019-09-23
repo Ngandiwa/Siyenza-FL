@@ -32,9 +32,9 @@ GenerateInteragencyOutput <-  function(tx_curr_startOfSiyenza,
   # ##### Uncomment if running the script within the function is desired. 
   # tx_curr_startOfSiyenza  <-  as.POSIXct("2019-03-01")
   # startOfSiyenza          <-  as.POSIXct("2019-03-15")
-  # endOfSiyenza            <-  as.POSIXct("2019-08-31")
-  # currentWeekStart        <-  as.POSIXct("2019-08-03")
-  # currentWeekEnd          <-  as.POSIXct("2019-08-09")
+  # endOfSiyenza            <-  as.POSIXct("2019-10-04")
+  # currentWeekStart        <-  as.POSIXct("2019-09-07")
+  # currentWeekEnd          <-  as.POSIXct("2019-09-13")
   # 
   # 
   ##### Calcuate weeks remaining as well as the total number of weeks
@@ -44,14 +44,15 @@ GenerateInteragencyOutput <-  function(tx_curr_startOfSiyenza,
   ##### TX_CURR Dates as agreed upon by interagency stakeholders. ####
   ### TX_CURR values are collected for only the days listed below ###
   tx_curr_dates <-  c("2019-03-01","2019-03-29","2019-04-12", "2019-05-10", 
-                      "2019-05-24","2019-06-07", "2019-06-21", "2019-07-05", "2019-07-19", "2019-08-02", "2019-08-16")
+                      "2019-05-24","2019-06-07", "2019-06-21", "2019-07-05", "2019-07-19", "2019-08-02", "2019-08-16", "2019-08-30", 
+                      "2019-09-13", "2019-09-27")
   
   ##### Import CDC datasets #####
-  cdc_result <- read_excel("RAW/CDC_Siyenza_20190822.xlsx", sheet = "Siyenza") %>%
+  cdc_result <- read_excel("RAW/CDC_Siyenza_20190917.xlsx", sheet = "Siyenza") %>%
     # filter(Week_End >= startOfSiyenza & Week_End <= date(currentWeekEnd) +1)
     filter(Week_End >= date(tx_curr_startOfSiyenza) & Week_End <= date(currentWeekEnd))
   ##### Import USAID datasets #####
-  usaid_result <- read_excel("RAW/USAID_Siyenza_20190822.xlsx", sheet = "USAID RAW DATA") %>% 
+  usaid_result <- read_excel("RAW/USAID_Siyenza_20190917.xlsx", sheet = "USAID RAW DATA") %>% 
     filter(Week_End >= date(tx_curr_startOfSiyenza) & Week_End <= date(currentWeekEnd))
   ##### Merge interagency datasets #####
   df_merged <- bind_rows(cdc_result, usaid_result) %>% 
@@ -95,8 +96,7 @@ GenerateInteragencyOutput <-  function(tx_curr_startOfSiyenza,
   ##### Calculate cumulative records
   df_cum <-  df_all %>%
     gather(indicator, value, cLTFU:uLTFU, na.rm = TRUE) %>% 
-    filter(indicator %in% c("HTS_TST_POS","TX_NEW", "TX_NEW_SAMEDAY", "TPT_Initiated")
-    ) %>% 
+    filter(indicator %in% c("HTS_TST_POS","TX_NEW", "TX_NEW_SAMEDAY", "TPT_Initiated")) %>% 
     group_by(Facility, indicator) %>% 
     arrange(Week_End) %>% 
     mutate(cum_value = cumsum(value)) %>% 
@@ -137,6 +137,7 @@ GenerateInteragencyOutput <-  function(tx_curr_startOfSiyenza,
   
   #### Merge TX_CURR TODATE with Baseline
   df_tx_curr_merged <-  bind_rows(df_tx_curr_baseline, df_max_txcurr_todate) 
+ 
   
   #### Calculate TX_NET_NEW and AVG
   df_net_new <- df_tx_curr_merged %>% 
@@ -153,6 +154,17 @@ GenerateInteragencyOutput <-  function(tx_curr_startOfSiyenza,
     mutate(Week_Start =  as.POSIXct(Week_Start),
            Week_End  = as.POSIXct(Week_End))
   
+  #### Calculate bi-weekly TX_NET NEW
+  df_tx_net_new_cum <- df_tx_curr_todate %>% 
+    filter(Week_End != date("2019-03-15")) %>% 
+    group_by(Facility, indicator) %>% 
+    arrange(Week_End) %>% 
+    mutate(diff_value = value - lag(value)) %>% 
+    ungroup() %>% 
+    mutate(indicator = paste0("TX_NET_NEW_BI_WEEKLY"),
+           value = diff_value)%>% 
+    select(-diff_value)
+ 
   
   #### Handle timezone changes
   attr(df_net_new$Week_End, "tzone") <- "UTC"
@@ -171,7 +183,7 @@ GenerateInteragencyOutput <-  function(tx_curr_startOfSiyenza,
  
   
   #### Merge NET NEW df with TX_CURR
-  df_curr <-  bind_rows(df_tx_curr_merged,df_net_new_partner)
+  df_curr <-  bind_rows(df_tx_curr_merged,df_net_new_partner, df_tx_net_new_cum)
   
   #### Convert to long
   df_final <-  df_final %>% 
